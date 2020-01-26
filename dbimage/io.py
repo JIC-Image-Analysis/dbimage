@@ -25,9 +25,10 @@ def read_dbim_from_fpath(fpath):
 
     with open(fpath, 'rb') as fh:
         hdr_bytes = fh.read(struct.calcsize(HDR_FORMAT))
+        array_info = bytes_to_array_info(hdr_bytes)
+        packed_size = array_info['packed_size']
+        fh.seek(-packed_size, 2)
         cbytes = fh.read()
-
-    array_info = bytes_to_array_info(hdr_bytes)
 
     shaped_array = compressed_bytes_to_shaped_array(cbytes, array_info)
 
