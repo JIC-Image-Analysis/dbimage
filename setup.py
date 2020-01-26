@@ -16,7 +16,7 @@ setup(name='dbimage',
       ],
       entry_points='''
         [console_scripts]
-        tif_to_dbim=dbimage.convert:convert_tif_image
+        tiff2dbim=dbimage.convert:convert_tif_image
         dbim_info=dbimage.info:dbim_info
       ''',
       zip_safe=False)
