@@ -1,5 +1,6 @@
 import sys
 import struct
+import logging
 
 import blosc
 import numpy as np
@@ -10,22 +11,52 @@ DTYPE_CODE_LOOKUP = {
     np.dtype('uint8'): 0
 }
 
-HDR_FORMAT = "iLLLLLL"
+DTYPE_REVERSE_LOOKUP = {
+    0: np.dtype('uint8')
+}
+
+HDR_FORMAT = "iQQ" + "LLL" + "LLL"
 
 
-def header_bytes_from_array(array):
-    dim = array.shape
+def array_info_from_array(array):
+
     strides = array.__array_interface__['strides']
-    assert strides, "Can't handle strides=None"
+    if strides is None:
+        strides = 0, 0, 0
 
-    dtype = array.dtype
+    array_info = dict(
+        dtype=array.dtype,
+        size=array.size,
+        strides=strides,
+        dim=array.shape
+    )
+
+    return array_info
+
+
+def array_info_to_hdr_values(array_info):
+
+    dtype = array_info['dtype']
     try:
         dtype_code = DTYPE_CODE_LOOKUP[dtype]
     except KeyError:
         print(f"Can't handle type {dtype}")
         sys.exit(2)
 
-    hdr_values = ((dtype_code,) + dim + strides)
+    hdr_szinfo = (dtype_code, array_info['size'], array_info['packed_size'])
+    hdr_values = hdr_szinfo + array_info['dim'] + array_info['strides']
+
+    return hdr_values
+
+
+def header_bytes_from_array(array, cbytes):
+
+    array_info = array_info_from_array(array)
+    array_info['packed_size'] = len(cbytes)
+    logging.debug(f"Packing with array_info={array_info}")
+
+    hdr_values = array_info_to_hdr_values(array_info)
+    logging.debug(f"Packing header values {hdr_values}")
     hdr_packed = struct.pack(HDR_FORMAT, *hdr_values)
 
     return hdr_packed
@@ -33,12 +64,21 @@ def header_bytes_from_array(array):
 
 def bytes_to_array_info(hdr_bytes):
     hdr_values = struct.unpack(HDR_FORMAT, hdr_bytes)
+    logging.debug(f"Read header values: {hdr_values}")
 
-    dtype_code = hdr_values[0]
-    dim = tuple(hdr_values[1:4])
-    strides = tuple(hdr_values[4:7])
+    dtype_code, size, packed_size, *rest = hdr_values
+    rdim, cdim, zdim, *strides = rest
 
-    return dtype_code, dim, strides
+
+    array_info = dict(
+        dtype=DTYPE_REVERSE_LOOKUP[dtype_code],
+        size=size,
+        packed_size=packed_size,
+        dim=(rdim, cdim, zdim),
+        strides=tuple(strides)
+    )
+
+    return array_info
 
 
 def arraydata_to_compressed_bytes(arraydata):
@@ -62,11 +102,19 @@ def compressed_bytes_to_arraydata(cbytes, size, dtype):
     return arraydata
 
 
-def compressed_bytes_to_shaped_array(cbytes, dim, strides, dtype=np.uint8):
+def compressed_bytes_to_shaped_array(cbytes, array_info):
 
-    rdim, cdim, zdim = dim
-    size = rdim * cdim * zdim
+    size = array_info['size']
+    dtype = array_info['dtype']
     arraydata = compressed_bytes_to_arraydata(cbytes, size, dtype)
-    shaped_array = np.lib.stride_tricks.as_strided(arraydata, dim, strides, writeable=False)
+
+    strides = array_info['strides']
+    dim = array_info['dim']
+    if strides == (0, 0, 0):
+        shaped_array = np.reshape(arraydata, dim)
+    else:
+        shaped_array = np.lib.stride_tricks.as_strided(arraydata, dim, strides, writeable=False)
 
     return shaped_array
+
+
