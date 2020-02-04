@@ -3,3 +3,5 @@ __pycache__
 local-data
 build
 dist
+venv
+scratch
