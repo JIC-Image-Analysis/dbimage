@@ -8,11 +8,18 @@ import numpy as np
 
 
 DTYPE_CODE_LOOKUP = {
-    np.dtype('uint8'): 0
+    np.dtype('uint8'): 0,
+    np.dtype('uint16'): 1,
+    np.dtype('uint32'): 2,
+    np.dtype('float32'): 3
+
 }
 
 DTYPE_REVERSE_LOOKUP = {
-    0: np.dtype('uint8')
+    0: np.dtype('uint8'),
+    1: np.dtype('uint16'),
+    2: np.dtype('uint32'),
+    3: np.dtype('float32'),
 }
 
 HDR_FORMAT = "iQQ" + "LLL" + "LLL"
